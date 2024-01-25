@@ -158,8 +158,8 @@ def generate_mp3_for_ssml(out_path, filename, ssml):
     ssml = "<speak>\n" + ssml + "</speak>\n"
     synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
     voice = texttospeech.VoiceSelectionParams(
-        language_code='en-GB',
-        name='en-GB-Neural2-B',
+        language_code='en-US',
+        name='en-US-Neural2-J',
     )
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
