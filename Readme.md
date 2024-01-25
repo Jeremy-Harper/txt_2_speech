@@ -1,3 +1,5 @@
+I copied from paper2speech and modified it so that I could take a txt file and have it be generated into a document. I wound up not having any luck with their facebook PDF parser on my mac or PC so I gave up and modified it to use a txt file directly. Works great but there are fidly bits I need to go fix like needing the file in both the source and the target and the fact I have to make sure the text document is udf8 rather than autodetecting. Overall though they did a wonderful job and I've just hacked this to be a bit easier for my workflow.
+
 # Paper2Speech
 
 ## Motivation
