@@ -51,6 +51,8 @@ Before you can use this tool, ensure you have the following:
 
 ## Usage
 
+You'll need to create folders audio_book & text_files
+
 To convert a markdown file into an MP3 audiobook, use the `main.py` script with the following syntax:
 
 ```sh
