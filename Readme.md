@@ -32,6 +32,12 @@ Before you can use this tool, ensure you have the following:
     cd <project-directory>
     ```
 
+2.a I recommend creating a virtual machine
+    ```sh
+    python3 -m venv audiobook
+    source audiobook/bin/activate
+    ```
+
 3. Install the required Python dependencies.
 
     ```sh
@@ -65,10 +71,10 @@ Adding More Voices
 To add more voices, update the voices dictionary in main.py with the new voice's language code and name, following the structure of the existing entries.
 
 ### Example
-Assuming you have your markdown file(s) in a directory named ./text_files and you want to save the generated audiobook MP3 files in a directory named ./audio_book, follow the example below:
+Assuming you have your book file(s) in a directory named ./text_files and you want to save the generated audiobook MP3 files in a directory named ./audio_book, follow the example below:
 
 ```sh
-python main.py ./text_files/my_markdown_file.md -o ./audio_book -v 1
+python main.py ./text_files/my_book_file.txt -o ./audio_book -v 1
 ```
 
 FYI - 
