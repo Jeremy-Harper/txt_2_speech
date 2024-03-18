@@ -1,80 +1,60 @@
 import os
 import re
+import sys
 import tempfile
-
+import glob
 from google.cloud import texttospeech
 from replacements import text_rules, math_rules
 
-# break length
-SECTION_BREAK = 2  # sec
-CAPTION_BREAK = 1.5  # sec
-
+# Define directories
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+SOURCE_DIR = os.getenv('SOURCE_DIR', PROJECT_DIR)  # Default to PROJECT_DIR if SOURCE_DIR not set
+DELIVERY_DIR = os.path.join(PROJECT_DIR, "audiobook")
+
+# Ensure DELIVERY_DIR exists
+os.makedirs(DELIVERY_DIR, exist_ok=True)
+
+# Set Google Cloud credentials
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join(PROJECT_DIR, "texttospeech.json")
 
+# Initialize Text-to-Speech client
 speech_client = texttospeech.TextToSpeechClient()
 
-
+# Function definitions
 def replace_nested(expr, rules):
-    """
-    Recursively replace LaTeX using the provided rules.
-    """
     changed = True
     while changed:
         changed = False
         for pattern, replacement in rules:
-            try:
-                new_expr, replacements_made = re.subn(pattern, replacement, expr)
-                if replacements_made > 0:
-                    changed = True
-                    expr = new_expr
-            except re.error as e:
-                print(f"Invalid pattern: {pattern}. Error: {e}")
+            new_expr, replacements_made = re.subn(pattern, replacement, expr)
+            if replacements_made > 0:
+                changed = True
+                expr = new_expr
     return expr
 
-
 def process_ssml(ssml, rules):
-    # Continue replacing as long as there are matches
     while re.search(r"\\\((.*?)\\\)", ssml):
         ssml = re.sub(r"\\\((.*?)\\\)", lambda match: replace_nested(match.group(1), rules), ssml)
     return ssml
 
-
 def remove_urls(line: str) -> str:
     return re.sub("https?://[\w/:%#\$&\?\(\)~\.=\+\-]+", "", line)
 
-
 def remove_references(line: str) -> str:
-    """
-    - remove reference numbers, e.g. [1], (2, 3), [1-3], (1, p.1ff.) including preceding spaces
-    - remove citations in square brackets, e.g. [Feynman et al., 1965], [Martius and Lampert, 2016], [Zaremba et al., 2014, Kusner et al., 2017, Li et al., 2019, Lample and Charton, 2020]
-    - remove citations in round brackets, e.g. (Welinder et al., 2010), (Kingma and Ba, 2014), (Reed et al., 2016a; Li et al., 2019; Koh et al., 2021), (Zaremba et al., 2014, Kusner et al., 2017, Li et al., 2019, Lample and Charton, 2020), (Zhang et al., 2017; 2018)
-    - remove year in embedded citations with et al., e.g. Nguyen et al. (2017), Garc ́ıa et al. [1989]
-    """
-    line = re.sub(
-        r'\s*(\[[0-9,-, ]+(, pp\. [0-9,-]+|, p\.\d+[f]?[f]?\.?)?\]|\([0-9,-, ]+(, pp\. [0-9,-]+|, p\.\d+[f]?[f]?\.?)?\))',
-        '', line)
     line = re.sub(r'\s*\[[^\]]*, \d{4}(?:, [^\]]*, \d{4})*\]', '', line)
     line = re.sub(r'\s*\([^\)]*, \d{4}(?:[;,] [^\)]*, \d{4}[a-zA-Z]*?)*\)', '', line)
-    line = re.sub(r'\s*(\b\w+\s+et al\.) (\[\d{4}\]|\(\d{4}\))', r'\1', line)
     return line
-
 
 def remove_markdown_syntax(line: str) -> str:
     line = re.sub(r"\*\*(.*?)\*\*", r"\1", line)  # bold
     line = re.sub(r"_(.*?)_", r"\1", line)  # italic
-    # remove * bullet points
-    line = re.sub(r"^\* ", "", line)
-    line = re.sub(r'`', '', line)
-    return line
-
+    line = re.sub(r"^\* ", "", line)  # bullet points
+    return line.replace('`', '')  # inline code
 
 def apply_text_rules(line: str) -> str:
-    """make replacements defined in replacements.py"""
     for pattern, replacement in text_rules:
         line = re.sub(pattern, replacement, line)
     return line
-
 
 def process_line(line: str) -> str:
     line = remove_urls(line)
@@ -83,6 +63,22 @@ def process_line(line: str) -> str:
     line = apply_text_rules(line)
     return line
 
+def generate_mp3_for_ssml(out_path, filename, ssml):
+    print("Started generating speech for {}".format(filename))
+    ssml = "<speak>\n" + ssml + "</speak>\n"
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+    voice = texttospeech.VoiceSelectionParams(language_code='en-US', name='en-US-Neural2-H')
+    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+    try:
+        response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    except Exception as e:
+        print(f"Error generating speech for {filename}: {e}, trying an alternative voice configuration...")
+        voice = texttospeech.VoiceSelectionParams(language_code='en-GB', name='en-GB-Wavenet-B')
+        response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    with open(os.path.join(out_path, filename), "wb") as out:
+        out.write(response.audio_content)
+    print("MP3 file saved: {}".format(os.path.join(out_path, filename)))
+    return os.path.join(out_path, filename)
 
 class MP3Generator:
     def __init__(self, md_filename):
@@ -152,41 +148,6 @@ class MP3Generator:
         return self.mp3_file_list
 
 
-def generate_mp3_for_ssml(out_path, filename, ssml):
-    print("Started generating speech for {}".format(filename))
-    # set text and configs
-    ssml = "<speak>\n" + ssml + "</speak>\n"
-    synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
-    voice = texttospeech.VoiceSelectionParams(
-        language_code='en-US',
-        name='en-US-Neural2-J',
-    )
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,
-    )
-
-    # generate speech
-    try:
-        response = speech_client.synthesize_speech(
-            request={"input": synthesis_input, "voice": voice, "audio_config": audio_config}
-        )
-    except Exception as e:
-        print("Retrying speech generation with WaveNet...")
-        voice = texttospeech.VoiceSelectionParams(
-            language_code='en-GB',
-            name='en-GB-Wavenet-B',
-        )
-        response = speech_client.synthesize_speech(
-            request={"input": synthesis_input, "voice": voice, "audio_config": audio_config}
-        )
-
-    # save a MP3 file and delete the text file
-    with open(os.path.join(out_path, filename), "wb") as out:
-        out.write(response.audio_content)
-    print("MP3 file saved: {}".format(filename))
-    return os.path.join(out_path, filename)
-
 
 def merge_mp3_files(out_path, mp3_file_list):
 
@@ -206,3 +167,10 @@ def merge_mp3_files(out_path, mp3_file_list):
     for mp3_file in mp3_file_list:
         os.remove(mp3_file)
     print("Ended merging mp3 files: {}".format(merged_mp3_file_name))
+
+# Main execution
+if __name__ == "__main__":
+    for md_filename in glob.glob(os.path.join(SOURCE_DIR, "*.md")):
+        mp3_generator = MP3Generator(md_filename)
+        mp3_file_list = mp3_generator.generate_mp3_files()
+    
