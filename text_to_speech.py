@@ -6,6 +6,11 @@ import glob
 from google.cloud import texttospeech
 from replacements import text_rules, math_rules
 
+# Define break times in seconds
+SECTION_BREAK = 2  # Adjust the time as needed
+CAPTION_BREAK = 1  # Adjust the time as needed
+
+
 # Define directories
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DIR = os.getenv('SOURCE_DIR', PROJECT_DIR)  # Default to PROJECT_DIR if SOURCE_DIR not set
@@ -63,32 +68,37 @@ def process_line(line: str) -> str:
     line = apply_text_rules(line)
     return line
 
-def generate_mp3_for_ssml(out_path, filename, ssml):
-    print("Started generating speech for {}".format(filename))
-    ssml = "<speak>\n" + ssml + "</speak>\n"
-    synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
-    voice = texttospeech.VoiceSelectionParams(language_code='en-US', name='en-US-Neural2-H')
-    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
-    try:
-        response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
-    except Exception as e:
-        print(f"Error generating speech for {filename}: {e}, trying an alternative voice configuration...")
-        voice = texttospeech.VoiceSelectionParams(language_code='en-GB', name='en-GB-Wavenet-B')
-        response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
-    with open(os.path.join(out_path, filename), "wb") as out:
-        out.write(response.audio_content)
-    print("MP3 file saved: {}".format(os.path.join(out_path, filename)))
-    return os.path.join(out_path, filename)
 
 class MP3Generator:
-    def __init__(self, md_filename):
+    def __init__(self, md_filename, output_dir, language_code, voice_name):
         self.md_filename = md_filename
+        self.output_dir = output_dir
+        self.language_code = language_code
+        self.voice_name = voice_name
         self.ssml = ""
         self.mp3_file_list = []
         self.temp_path = tempfile.gettempdir()
         self.title_flag = True
         self.table_flag = False
-
+    
+    def generate_mp3_for_ssml(self, filename, ssml):
+        print("Started generating speech for {}".format(filename))
+        ssml = "<speak>\n" + ssml + "</speak>\n"
+        synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
+        voice = texttospeech.VoiceSelectionParams(language_code=self.language_code, name=self.voice_name)
+        audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+        try:
+            response = speech_client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+        except Exception as e:
+            print(f"Error generating speech for {filename}: {e}")
+            # Handle the exception or try an alternative configuration as needed
+            return None
+        output_file_path = os.path.join(self.output_dir, filename)
+        with open(output_file_path, "wb") as out:
+            out.write(response.audio_content)
+        print("MP3 file saved: {}".format(output_file_path))
+        return output_file_path
+        
     def handle_line(self, line):
         section_break = f'<break time="{SECTION_BREAK}s"/>'
         caption_break = f'<break time="{CAPTION_BREAK}s"/>'
@@ -124,8 +134,8 @@ class MP3Generator:
 
                 if len(self.ssml.encode("utf-8")) + len(line.encode("utf-8")) > 4500:
                     filename = f'{os.path.basename(self.md_filename)[:-4]}-{id}.mp3'
-                    mp3_file = generate_mp3_for_ssml(self.temp_path, filename,
-                                                     self.ssml)
+                    # Corrected line below
+                    mp3_file = self.generate_mp3_for_ssml(filename, self.ssml)
                     self.mp3_file_list.append(mp3_file)
                     self.ssml = ""
 
@@ -142,11 +152,11 @@ class MP3Generator:
 
             if self.ssml:
                 filename = f'{os.path.basename(self.md_filename)[:-4]}-{id}.mp3'
-                mp3_file = generate_mp3_for_ssml(self.temp_path, filename, self.ssml)
+                # Corrected line below
+                mp3_file = self.generate_mp3_for_ssml(filename, self.ssml)
                 self.mp3_file_list.append(mp3_file)
 
         return self.mp3_file_list
-
 
 
 def merge_mp3_files(out_path, mp3_file_list):
@@ -173,4 +183,3 @@ if __name__ == "__main__":
     for md_filename in glob.glob(os.path.join(SOURCE_DIR, "*.md")):
         mp3_generator = MP3Generator(md_filename)
         mp3_file_list = mp3_generator.generate_mp3_files()
-    
