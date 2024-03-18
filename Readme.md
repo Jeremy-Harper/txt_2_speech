@@ -1,10 +1,82 @@
-I copied from paper2speech and modified it so that I could take a txt file and have it be generated into an audiobook, it generated a 6 hour book. I also changed the voice used to a US based one from UK. I wound up not having any luck with their facebook PDF parser on my mac or PC so I gave up and modified it to use a txt file directly. Works great but there are fidly bits I need to go fix like needing the txt file in both the source and the target and the fact I have to make sure the text document is udf8 rather than autodetecting. Overall though they did a wonderful job and I've just hacked this to be a bit easier for my workflow. '
+I copied from paper2speech and modified it so that I could take a txt file and have it be generated into an audiobook, I've used it to generate a 20hr+ audiobook. This uses a txt file directly.
+# Markdown to Audiobook Converter
 
+This Python project converts markdown files into audiobooks using Text-to-Speech (TTS) technology. It leverages Google Cloud's Text-to-Speech API to generate MP3 files from the text content of markdown files. This tool is perfect for creating audiobooks, podcasts, or any audio content from written documents.
+
+## Features
+
+- Support for multiple voice options
+- Conversion of markdown syntax to plain text suitable for TTS
+- Handling of special syntax in markdown for improved audio quality
+
+## Prerequisites
+
+Before you can use this tool, ensure you have the following:
+
+- Python 3.x installed on your system
+- A Google Cloud account with Text-to-Speech API enabled
+- The google-cloud-texttospeech library installed
+- A Google Cloud service account key file (texttospeech.json)
+
+## Installation
+
+1. Clone this repository to your local machine.
+
+    ```sh
+    git clone <repository-url>
+    ```
+
+2. Navigate into the project directory.
+
+    ```sh
+    cd <project-directory>
+    ```
+
+3. Install the required Python dependencies.
+
+    ```sh
+    pip install -r requirements.txt
+    ```
+
+## Configuration
+
+- Place your Google Cloud service account key file (texttospeech.json) in the project directory.
+- If you want to change the source directory for markdown files, set the SOURCE_DIR environment variable to the desired path.
+
+## Usage
+
+To convert a markdown file into an MP3 audiobook, use the `main.py` script with the following syntax:
+
+```sh
+python main.py <path-to-markdown-file> -o <output-directory> -v <voice-option>
+```
+
+Parameters:
+
+    <path-to-markdown-file>: The path to the markdown file you want to convert.
+    <output-directory>: (Optional) The directory where the output MP3 files will be saved. Default is ./audiobook.
+    <voice-option>: (Optional) The voice selection for the TTS conversion. Default is 1. Available voices are:
+        1: English (US) Female (en-US-Wavenet-F)
+        2: English (GB) Male (en-GB-Wavenet-B)
+        Add more voice options as needed in the voices dictionary within main.py.
+
+Adding More Voices
+
+To add more voices, update the voices dictionary in main.py with the new voice's language code and name, following the structure of the existing entries.
+
+### Example
+Assuming you have your markdown file(s) in a directory named ./text_files and you want to save the generated audiobook MP3 files in a directory named ./audio_book, follow the example below:
+
+```sh
+python main.py ./text_files/my_markdown_file.md -o ./audio_book -v 1
+```
+
+FYI - 
 I created bulk_docx_to_txt.py to allow me to move all docx files in a folder into txt. I used this to generate voice files specific to chapters. (If you are using a word doc with proper headers you are able to use word's features to split apart by the header level into many docx files. *Note don't do this with your original file, create a copy)
 
 
 
-# Paper2Speech
+# Paper2Speech (ORIGINAL INSTRUCTIONS)
 
 ## Motivation
 As a student in applied mathematics / machine learning, I often get to read scientific books, lecture notes and papers.
